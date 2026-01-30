@@ -1,0 +1,25 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Session Demo</title>
+  </head>
+  <body>
+    <h1>Durable Object Session</h1>
+    <p id="visits"></p>
+    <script>
+      window.addEventListener("load", async () => {
+        try {
+          const stateRes = await fetch("/session");
+          const state = await stateRes.json();
+          document.getElementById("visits").textContent =
+            "Visits in this session: " + state.requests;
+        } catch (err) {
+          document.getElementById("status").textContent =
+            "Failed to initialize session.";
+        }
+      });
+    </script>
+  </body>
+</html>
