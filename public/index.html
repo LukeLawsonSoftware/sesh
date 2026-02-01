@@ -11,13 +11,25 @@
     <script>
       window.addEventListener("load", async () => {
         try {
-          const stateRes = await fetch("/session");
-          const state = await stateRes.json();
+          const event = {
+            idempotencyKey: crypto.randomUUID(),
+            sentAt: new Date().toISOString(),
+          };
+          const eventRes = await fetch("/event", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(event),
+          });
+          const processedEvent = await eventRes.json();
+          console.log("Event fired:", processedEvent);
           document.getElementById("visits").textContent =
-            "Visits in this session: " + state.requests;
+            "Event: " + JSON.stringify(processedEvent, null, 2);
         } catch (err) {
-          document.getElementById("status").textContent =
-            "Failed to initialize session.";
+          document.getElementById("visits").textContent =
+            "Failed to fire event.";
+          console.error(err);
         }
       });
     </script>

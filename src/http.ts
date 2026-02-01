@@ -32,6 +32,14 @@ export async function handleRequest(
     );
   }
 
+  // Handle event posting
+  if (url.pathname === "/event" && request.method === "POST") {
+    const sessionId = getSessionIdFromRequest(request);
+    const id = env.SESSIONS.idFromName(sessionId);
+    const stub = env.SESSIONS.get(id);
+    return stub.fetch(request);
+  }
+
   // Fallback to static assets
   return env.ASSETS.fetch(request);
 }
