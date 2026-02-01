@@ -1,4 +1,4 @@
-export interface IClientSentEvent {
+export interface ISentEvent {
   idempotencyKey: string;
   sentAt: string;
 }
@@ -9,13 +9,13 @@ export enum EEventProcessingStatus {
   FAILED = "failed",
 }
 
-export interface IStoredEvent extends IClientSentEvent {
+export interface IReceivedEvent extends ISentEvent {
   eventId: string;
   receivedAt: string;
   status: EEventProcessingStatus;
 }
 
-export interface IProcessedEvent extends IStoredEvent {
+export interface IProcessedEvent extends IReceivedEvent {
   processingStartedAt: string;
   processingCompletedAt: string;
 }

@@ -2,8 +2,9 @@ import { DurableObject } from "cloudflare:workers";
 import { SessionStateKeys } from "./keys";
 import {
   EEventProcessingStatus,
-  IClientSentEvent,
-  IStoredEvent,
+  ISentEvent,
+  IReceivedEvent,
+  IProcessedEvent,
 } from "../../libs/event/types/event";
 import { processEvent } from "../../libs/event/service";
 import { buildResponse } from "./response";
@@ -33,38 +34,38 @@ export class Session extends DurableObject {
 
     // Receive events
     if (url.pathname === "/event") {
-      const eventData = (await request.json()) as IClientSentEvent;
+      const eventData = (await request.json()) as ISentEvent;
 
-      const { isClaimed, storedEvent } = await this.ctx.storage.transaction<{
+      const { isClaimed, received } = await this.ctx.storage.transaction<{
         isClaimed: boolean;
-        storedEvent: IStoredEvent;
+        received: IReceivedEvent;
       }>(async (tx) => {
         const seenKey = `${SessionStateKeys.IDEMPOTENCY_BASE}${eventData.idempotencyKey}`;
         const previouslySeenEventId = await tx.get<string>(seenKey);
 
         // Event already received
         if (previouslySeenEventId) {
-          const previouslySeenEvent = await tx.get<IStoredEvent>(
+          const previouslySeenEvent = await tx.get<IReceivedEvent>(
             `${SessionStateKeys.EVENT_BASE}${previouslySeenEventId}`,
           );
           if (
             previouslySeenEvent?.status === EEventProcessingStatus.COMPLETED
           ) {
-            return { isClaimed: true, storedEvent: previouslySeenEvent };
+            return { isClaimed: true, received: previouslySeenEvent };
           }
           if (
             previouslySeenEvent?.status === EEventProcessingStatus.PROCESSING
           ) {
             return {
               isClaimed: true,
-              storedEvent: previouslySeenEvent,
+              received: previouslySeenEvent,
             };
           }
         }
 
         // New event
         const newEventId = crypto.randomUUID();
-        const newEvent: IStoredEvent = {
+        const newEvent: IReceivedEvent = {
           sentAt: eventData.sentAt,
           idempotencyKey: eventData.idempotencyKey,
           eventId: newEventId,
@@ -73,25 +74,21 @@ export class Session extends DurableObject {
         };
         await tx.put(seenKey, newEventId);
         await tx.put(`${SessionStateKeys.EVENT_BASE}${newEventId}`, newEvent);
-        return { isClaimed: false, storedEvent: newEvent };
+        return { isClaimed: false, received: newEvent };
       });
-
-      const eventKey = `${SessionStateKeys.EVENT_BASE}${storedEvent.eventId}`;
 
       if (isClaimed) {
         if (
-          storedEvent?.status === EEventProcessingStatus.COMPLETED ||
-          storedEvent?.status === EEventProcessingStatus.PROCESSING
+          received?.status === EEventProcessingStatus.COMPLETED ||
+          received?.status === EEventProcessingStatus.PROCESSING
         ) {
-          return buildResponse(storedEvent);
+          return buildResponse(received);
         }
       }
 
-      const processedEvent = await processEvent(storedEvent);
+      const eventKey = `${SessionStateKeys.EVENT_BASE}${received.eventId}`;
+      const processedEvent = await processEvent(received, this.ctx);
       await this.ctx.storage.transaction(async (tx) => {
-        const current = await tx.get<IStoredEvent>(eventKey);
-        if (!current || current.status === EEventProcessingStatus.COMPLETED)
-          return;
         await tx.put(eventKey, processedEvent);
       });
 
